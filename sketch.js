@@ -88,8 +88,26 @@ function drawPool() {
 }
 
 function updateMouse() {
-	// Placeholder: move right
-	mouse.x += mouse.speed * 0.5;
+	// Convert cursor position to simulation coordinates
+	const simX = mouseX - width / 1.5;
+	const simY = mouseY - height / 2;
+
+	// Vector from mouse to cursor
+	let dx = simX - mouse.x;
+	let dy = simY - mouse.y;
+
+	// Distance to cursor
+	let d = sqrt(dx * dx + dy * dy);
+
+	if (d > 1) {
+		// Normalize
+		dx /= d;
+		dy /= d;
+
+		// Move mouse toward cursor
+		mouse.x += dx * mouse.speed;
+		mouse.y += dy * mouse.speed;
+	}
 }
 
 function updateCat() {
