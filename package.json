@@ -1,0 +1,15 @@
+{
+  "name": "cat-mouse-sim",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "sketch.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@types/p5": "^1.7.7"
+  }
+}
