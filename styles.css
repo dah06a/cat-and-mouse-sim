@@ -35,11 +35,15 @@ main {
 }
 
 .btn-primary {
-  background-color: #28a745;
+  background-color: #2b7d7c;
 }
 
 .btn-secondary {
-  background-color: #3a5f7f;
+  background-color: #4f687e;
+}
+
+.btn-success {
+  background-color: mediumseagreen;
 }
 
 .btn-danger {
