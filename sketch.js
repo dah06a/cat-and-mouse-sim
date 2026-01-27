@@ -3,11 +3,12 @@ const windowHeight = window.innerHeight;
 
 const R = windowWidth / 10; // pool radius
 const ANGLE_ALLOWANCE = 0.02; // about 1 degree
-const SIM_SPEED = 0.5;
+const SIM_SPEED = 1;
 const SIM_SIZE = 10;
 const CAT_SPEED_MULTIPLIER = 4;
 
-let simState = "idle"; // "idle", "running", "caught", "escaped"
+let simState = "idle"; // "idle", "running", "strategy", "caught", "escaped"
+let currentStrategy = null;
 let mouse;
 let prevMouse;
 let cat;
@@ -20,16 +21,26 @@ function setup() {
 	angleMode(RADIANS);
 
 	// Setup buttons
-	startStopButton = createButton("Start");
-	startStopButton.class("btn btn-primary");
-	startStopButton.position(windowWidth / 5, windowHeight / 6);
-	startStopButton.mousePressed(handleStartStop);
+	resetBtn = createButton("Reset");
+	resetBtn.class("btn btn-secondary");
+	resetBtn.position(windowWidth / 5, windowHeight / 1.5);
+	resetBtn.mousePressed(resetSimulation);
 
-	resetButton = createButton("Reset");
-	resetButton.class("btn btn-secondary");
-	resetButton.position(windowWidth / 3.5, windowHeight / 6);
-	resetButton.mousePressed(resetSimulation);
+	manualModeBtn = createButton("Strategy: Manual Mode");
+	manualModeBtn.class("btn btn-primary");
+	manualModeBtn.position(windowWidth / 5, windowHeight / 6);
+	manualModeBtn.mousePressed(handleStartStop);
 
+	nearEdgeStratBtn = createButton("Strategy: Nearest Edge");
+	nearEdgeStratBtn.class("btn btn-warning");
+	nearEdgeStratBtn.position(windowWidth / 5, windowHeight / 4);
+	nearEdgeStratBtn.mousePressed(startNearestEdge);
+
+	initializeCatMouse();
+	resetSimulation();
+}
+
+function initializeCatMouse() {
 	// Initialize mouse at center
 	mouse = {
 		x: 0,
@@ -46,8 +57,6 @@ function setup() {
 		speed: SIM_SPEED * CAT_SPEED_MULTIPLIER,
 	};
 	prevCat = { x: 0, y: 0 };
-
-	resetSimulation();
 }
 
 function draw() {
@@ -63,8 +72,12 @@ function draw() {
 		return;
 	}
 
-	if (simState === "running") {
-		updateMouse();
+	if (simState === "running" || simState === "strategy") {
+		if (simState === "strategy") {
+			currentStrategy();
+		} else {
+			updateMouse();
+		}
 		updateCat();
 		drawMouse();
 		drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
@@ -74,19 +87,20 @@ function draw() {
 		// Check for collision
 		if (checkCollision()) {
 			noLoop();
-			startStopButton.attribute("disabled", "true");
-			startStopButton.html("Caught!");
+			text("Caught!", width / 1.5, height / 2);
 		}
 		// Check for escape
 		if (checkEscape()) {
 			noLoop();
-			startStopButton.attribute("disabled", "true");
-			startStopButton.class("btn btn-success");
-			startStopButton.html("Escaped!");
+			manualModeBtn.attribute("disabled", "true");
+			manualModeBtn.class("btn btn-success");
+			manualModeBtn.html("Escaped!");
 		}
 
 		// Compute and log speeds for debugging
-		// computeSpeeds();
+		if (window.debugCatMouseSim) {
+			computeSpeeds();
+		}
 	}
 }
 
@@ -94,16 +108,16 @@ function handleStartStop() {
 	if (simState === "idle") {
 		simState = "running";
 		loop();
-		startStopButton.html("Stop");
-		startStopButton.class("btn btn-danger");
+		manualModeBtn.html("Pause");
+		manualModeBtn.class("btn btn-danger");
 		return;
 	}
 
 	if (simState === "running") {
 		simState = "idle";
 		noLoop();
-		startStopButton.html("Start");
-		startStopButton.class("btn btn-primary");
+		manualModeBtn.html("Resume");
+		manualModeBtn.class("btn btn-primary");
 		return;
 	}
 }
@@ -218,9 +232,10 @@ function checkEscape() {
 
 function resetSimulation() {
 	simState = "idle";
+	currentStrategy = null;
 
 	// Random mouse position
-	const p = randomPointInCircle(R);
+	const p = randomPointInCircle(R / 3);
 	mouse.x = p.x;
 	mouse.y = p.y;
 	mouse.speed = SIM_SPEED;
@@ -239,52 +254,18 @@ function resetSimulation() {
 	prevCat.x = cat.x;
 	prevCat.y = cat.y;
 
-	// Reset UI
-	startStopButton.removeAttribute("disabled");
-	startStopButton.html("Start");
-	startStopButton.class("btn btn-primary");
-
 	// Draw exactly one clean frame
 	redraw();
 	noLoop();
 }
 
-function randomPointInCircle(radius) {
-	const angle = random(TWO_PI);
-	const r = radius * sqrt(random()); // uniform distribution
-	return {
-		x: r * cos(angle),
-		y: r * sin(angle),
-	};
-}
+function startNearestEdge() {
+	simState = "strategy";
+	currentStrategy = strategyNearestEdge;
 
-function randomAngle() {
-	return random(TWO_PI);
-}
+	// Disable other controls
+	manualModeBtn.attribute("disabled", "true");
+	nearEdgeStratBtn.attribute("disabled", "true");
 
-function computeSpeeds() {
-	const dt = 1 / frameRate(); // seconds per frame
-
-	// Mouse distance traveled
-	const mdx = mouse.x - prevMouse.x;
-	const mdy = mouse.y - prevMouse.y;
-	const mouseDist = sqrt(mdx * mdx + mdy * mdy);
-	const mouseSpeedActual = mouseDist / dt;
-
-	// Cat distance traveled
-	const cdx = cat.x - prevCat.x;
-	const cdy = cat.y - prevCat.y;
-	const catDist = sqrt(cdx * cdx + cdy * cdy);
-	const catSpeedActual = catDist / dt;
-
-	// Debug log
-	console.log(
-		`Mouse speed: ${mouseSpeedActual.toFixed(2)} px/s | Cat speed: ${catSpeedActual.toFixed(2)} px/s`,
-	);
-
-	// Update previous positions
-	prevMouse.x = mouse.x;
-	prevMouse.y = mouse.y;
-	prevCat.x = cat.x;
-	prevCat.y = cat.y;
+	loop(); // begin simulation
 }

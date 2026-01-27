@@ -46,6 +46,10 @@ main {
   background-color: mediumseagreen;
 }
 
+.btn-warning {
+  background-color: rgb(146, 128, 27);
+}
+
 .btn-danger {
   background-color: coral
 }
