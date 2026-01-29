@@ -7,7 +7,8 @@ const SIM_SPEED = 1;
 const SIM_SIZE = 10;
 const CAT_SPEED_MULTIPLIER = 4;
 
-let simState = "idle"; // "idle", "running", "strategy", "caught", "escaped"
+let simState = "idle"; // "idle", "running", "terminal"
+let simResult = null;
 let currentStrategy = null;
 let mouse;
 let prevMouse;
@@ -16,28 +17,37 @@ let prevCat;
 
 function setup() {
 	noLoop();
+
 	const canvas = createCanvas(windowWidth / 1.5, windowHeight / 1.5);
 	canvas.parent("canvas-container");
 	angleMode(RADIANS);
 
-	// Setup buttons
+	initializeButtons();
+	initializeCatMouse();
+	resetSimulation();
+}
+
+function initializeButtons() {
 	resetBtn = createButton("Reset");
 	resetBtn.class("btn btn-secondary");
 	resetBtn.position(windowWidth / 5, windowHeight / 1.5);
 	resetBtn.mousePressed(resetSimulation);
 
+	playPauseBtn = createButton("Pause");
+	playPauseBtn.class("btn btn-danger");
+	playPauseBtn.position(windowWidth / 3.5, windowHeight / 1.5);
+	playPauseBtn.mousePressed(handlePlayPause);
+	playPauseBtn.hide();
+
 	manualModeBtn = createButton("Strategy: Manual Mode");
 	manualModeBtn.class("btn btn-primary");
 	manualModeBtn.position(windowWidth / 5, windowHeight / 6);
-	manualModeBtn.mousePressed(handleStartStop);
+	manualModeBtn.mousePressed(() => startStrategy(updateMouse));
 
 	nearEdgeStratBtn = createButton("Strategy: Nearest Edge");
 	nearEdgeStratBtn.class("btn btn-warning");
 	nearEdgeStratBtn.position(windowWidth / 5, windowHeight / 4);
-	nearEdgeStratBtn.mousePressed(startNearestEdge);
-
-	initializeCatMouse();
-	resetSimulation();
+	nearEdgeStratBtn.mousePressed(() => startStrategy(strategyNearestEdge));
 }
 
 function initializeCatMouse() {
@@ -64,61 +74,52 @@ function draw() {
 	translate(width / 1.5, height / 2); // move origin to center of pool
 	drawPool();
 
-	if (simState === "idle") {
-		drawMouse();
-		drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
-		drawCat();
-		drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
-		return;
-	}
+	switch (simState) {
+		case "idle":
+			drawMouse();
+			drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
+			drawCat();
+			drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
+			break;
 
-	if (simState === "running" || simState === "strategy") {
-		if (simState === "strategy") {
+		case "running":
 			currentStrategy();
-		} else {
-			updateMouse();
-		}
-		updateCat();
-		drawMouse();
-		drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
-		drawCat();
-		drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
+			updateCat();
+			drawMouse();
+			drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
+			drawCat();
+			drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
+			checkCollision();
+			checkEscape();
+			if (window.debugCatMouseSim) {
+				computeSpeeds();
+			}
+			break;
 
-		// Check for collision
-		if (checkCollision()) {
+		case "terminal":
+			playPauseBtn.hide();
+			fill(simResult === "escaped" ? "green" : "red");
+			textSize(24);
+			textAlign(CENTER, CENTER);
+			text(simResult.toUpperCase(), 0, -R - 20);
+			textAlign(LEFT, BASELINE);
+			if (simResult === "escaped") {
+				drawMouse();
+				drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
+			} else {
+				drawCat();
+				drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
+				noLoop();
+			}
+			break;
+
+		default:
+			console.error("Unknown simulation state:", simState);
+			fill("red");
+			textSize(24);
+			textAlign(CENTER, CENTER);
+			text("ERROR - please refresh and try again", 0, -R - 20);
 			noLoop();
-			text("Caught!", width / 1.5, height / 2);
-		}
-		// Check for escape
-		if (checkEscape()) {
-			noLoop();
-			manualModeBtn.attribute("disabled", "true");
-			manualModeBtn.class("btn btn-success");
-			manualModeBtn.html("Escaped!");
-		}
-
-		// Compute and log speeds for debugging
-		if (window.debugCatMouseSim) {
-			computeSpeeds();
-		}
-	}
-}
-
-function handleStartStop() {
-	if (simState === "idle") {
-		simState = "running";
-		loop();
-		manualModeBtn.html("Pause");
-		manualModeBtn.class("btn btn-danger");
-		return;
-	}
-
-	if (simState === "running") {
-		simState = "idle";
-		noLoop();
-		manualModeBtn.html("Resume");
-		manualModeBtn.class("btn btn-primary");
-		return;
 	}
 }
 
@@ -129,6 +130,18 @@ function drawPool() {
 	circle(0, 0, R * 2);
 	fill("black");
 	circle(0, 0, R / 50); // center marker
+}
+
+function handlePlayPause() {
+	if (isLooping()) {
+		noLoop();
+		playPauseBtn.html("Play");
+		playPauseBtn.class("btn btn-success");
+	} else {
+		loop();
+		playPauseBtn.html("Pause");
+		playPauseBtn.class("btn btn-danger");
+	}
 }
 
 function updateMouse() {
@@ -222,17 +235,27 @@ function checkCollision() {
 	// Collision threshold (tune this)
 	const threshold = SIM_SIZE * 0.7;
 
-	return dist < threshold;
+	if (dist < threshold) {
+		simState = "terminal";
+		simResult = "caught";
+	}
 }
 
 function checkEscape() {
 	const distFromCenter = sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
-	return distFromCenter >= R;
+	if (distFromCenter >= R) {
+		simState = "terminal";
+		simResult = "escaped";
+	}
 }
 
 function resetSimulation() {
+	// Reset simulation state
 	simState = "idle";
+	simResult = null;
 	currentStrategy = null;
+	manualModeBtn.show();
+	nearEdgeStratBtn.show();
 
 	// Random mouse position
 	const p = randomPointInCircle(R / 3);
@@ -259,13 +282,11 @@ function resetSimulation() {
 	noLoop();
 }
 
-function startNearestEdge() {
-	simState = "strategy";
-	currentStrategy = strategyNearestEdge;
-
-	// Disable other controls
-	manualModeBtn.attribute("disabled", "true");
-	nearEdgeStratBtn.attribute("disabled", "true");
-
-	loop(); // begin simulation
+function startStrategy(strategyFunc) {
+	simState = "running";
+	currentStrategy = strategyFunc;
+	manualModeBtn.hide();
+	nearEdgeStratBtn.hide();
+	playPauseBtn.show();
+	loop();
 }
