@@ -50,6 +50,10 @@ main {
   background-color: rgb(146, 128, 27);
 }
 
+.btn-info {
+  background-color: darkblue;
+}
+
 .btn-danger {
   background-color: coral
 }

@@ -6,6 +6,13 @@ const ANGLE_ALLOWANCE = 0.02; // about 1 degree
 const SIM_SPEED = 1;
 const SIM_SIZE = 10;
 const CAT_SPEED_MULTIPLIER = 4;
+const CAT_SETTLE_THRESHOLD = 0.04; // how slow the cat must be
+const CAT_SETTLE_FRAMES = 30; // how many frames in a row
+
+const SPIRAL_CENTER_THRESHOLD = 2; // how close to center counts as "at center"
+const SPIRAL_DASH_FRAMES = 10; // how long to dash opposite
+const SPIRAL_RADIAL_WEIGHT = 1.0; // outward push
+const SPIRAL_TANGENTIAL_WEIGHT = 0.8; // sideways push (away from cat)
 
 let simState = "idle"; // "idle", "running", "terminal"
 let simResult = null;
@@ -14,6 +21,8 @@ let mouse;
 let prevMouse;
 let cat;
 let prevCat;
+let prevCatAngle = 0;
+let catAngularVelocity = 0;
 
 function setup() {
 	noLoop();
@@ -39,15 +48,25 @@ function initializeButtons() {
 	playPauseBtn.mousePressed(handlePlayPause);
 	playPauseBtn.hide();
 
-	manualModeBtn = createButton("Strategy: Manual Mode");
-	manualModeBtn.class("btn btn-primary");
-	manualModeBtn.position(windowWidth / 5, windowHeight / 6);
-	manualModeBtn.mousePressed(() => startStrategy(updateMouse));
+	manualModeStratBtn = createButton("Strategy: Manual Mode");
+	manualModeStratBtn.class("btn btn-primary");
+	manualModeStratBtn.position(windowWidth / 5, windowHeight / 6);
+	manualModeStratBtn.mousePressed(() => startStrategy(manualUpdateMouse));
 
 	nearEdgeStratBtn = createButton("Strategy: Nearest Edge");
 	nearEdgeStratBtn.class("btn btn-warning");
 	nearEdgeStratBtn.position(windowWidth / 5, windowHeight / 4);
 	nearEdgeStratBtn.mousePressed(() => startStrategy(strategyNearestEdge));
+
+	dashOppStratBtn = createButton("Strategy: Opposite Dash");
+	dashOppStratBtn.class("btn btn-info");
+	dashOppStratBtn.position(windowWidth / 5, windowHeight / 3);
+	dashOppStratBtn.mousePressed(() => startStrategy(strategyDashOpposite));
+
+	spiralStratBtn = createButton("Strategy: Spiral Escape");
+	spiralStratBtn.class("btn btn-danger");
+	spiralStratBtn.position(windowWidth / 5, windowHeight / 2.4);
+	spiralStratBtn.mousePressed(() => startStrategy(strategySpiralEscape));
 }
 
 function initializeCatMouse() {
@@ -56,6 +75,12 @@ function initializeCatMouse() {
 		x: 0,
 		y: 0,
 		speed: SIM_SPEED,
+		dashDir: null,
+		spiralPhase: 0,
+		spiralFrames: 0,
+		spiralDashDir: null,
+		spiralCatDir: null,
+		spiralCatStillFrames: 0,
 	};
 	prevMouse = { x: 0, y: 0 };
 
@@ -144,29 +169,6 @@ function handlePlayPause() {
 	}
 }
 
-function updateMouse() {
-	// Convert cursor position to simulation coordinates
-	const simX = mouseX - width / 1.5;
-	const simY = mouseY - height / 2;
-
-	// Vector from mouse to cursor
-	let dx = simX - mouse.x;
-	let dy = simY - mouse.y;
-
-	// Distance to cursor
-	let d = sqrt(dx * dx + dy * dy);
-
-	if (d > 1) {
-		// Normalize
-		dx /= d;
-		dy /= d;
-
-		// Move mouse toward cursor
-		mouse.x += dx * mouse.speed;
-		mouse.y += dy * mouse.speed;
-	}
-}
-
 function updateCat() {
 	let mouseAngle = atan2(mouse.y, mouse.x);
 
@@ -189,6 +191,10 @@ function updateCat() {
 	const angularSpeed = (catLinearSpeed * dt) / R;
 	cat.angle += direction * angularSpeed;
 	cat.angle = atan2(sin(cat.angle), cos(cat.angle));
+
+	// update cat velocity and angle for strategy decisions
+	catAngularVelocity = cat.angle - prevCatAngle;
+	prevCatAngle = cat.angle;
 }
 
 function drawMouse() {
@@ -254,14 +260,22 @@ function resetSimulation() {
 	simState = "idle";
 	simResult = null;
 	currentStrategy = null;
-	manualModeBtn.show();
+	manualModeStratBtn.show();
 	nearEdgeStratBtn.show();
+	dashOppStratBtn.show();
+	spiralStratBtn.show();
 
 	// Random mouse position
 	const p = randomPointInCircle(R / 3);
 	mouse.x = p.x;
 	mouse.y = p.y;
 	mouse.speed = SIM_SPEED;
+	mouse.dashDir = null;
+	mouse.spiralPhase = 0;
+	mouse.spiralFrames = 0;
+	mouse.spiralDashDir = null;
+	mouse.spiralCatDir = null;
+	mouse.spiralCatStillFrames = 0;
 
 	// Random cat angle
 	cat.angle = randomAngle();
@@ -285,8 +299,10 @@ function resetSimulation() {
 function startStrategy(strategyFunc) {
 	simState = "running";
 	currentStrategy = strategyFunc;
-	manualModeBtn.hide();
+	manualModeStratBtn.hide();
 	nearEdgeStratBtn.hide();
+	dashOppStratBtn.hide();
+	spiralStratBtn.hide();
 	playPauseBtn.show();
 	loop();
 }
