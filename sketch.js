@@ -328,6 +328,9 @@ function resetSimulation() {
 	dashOppStratBtn.show();
 	spiralStratBtn.show();
 	optimalCircleBtn.show();
+	playPauseBtn.html("Pause");
+	playPauseBtn.class("btn btn-danger");
+	playPauseBtn.hide();
 
 	// Random mouse position
 	const p = randomPointInCircle(R / 2);
