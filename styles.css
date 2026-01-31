@@ -23,6 +23,7 @@ main {
 .btn {
   padding: 10px 20px;
   margin: 5px;
+  width: 200px;
   border: none;
   border-radius: 4px;
   background-color: #007BFF;
@@ -52,6 +53,10 @@ main {
 
 .btn-info {
   background-color: darkblue;
+}
+
+.btn-functional {
+  background-color: purple;
 }
 
 .btn-danger {

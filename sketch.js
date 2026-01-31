@@ -1,19 +1,29 @@
+// Global constants
 const windowWidth = window.innerWidth;
 const windowHeight = window.innerHeight;
 
-const R = windowWidth / 10; // pool radius
+// Simulation constants
+const R = windowWidth / 6; // pool radius
 const ANGLE_ALLOWANCE = 0.02; // about 1 degree
 const SIM_SPEED = 1;
-const SIM_SIZE = 10;
+const SIM_SIZE = 8;
 const CAT_SPEED_MULTIPLIER = 4;
-const CAT_SETTLE_THRESHOLD = 0.04; // how slow the cat must be
-const CAT_SETTLE_FRAMES = 30; // how many frames in a row
 
+// Spiral strategy constants
 const SPIRAL_CENTER_THRESHOLD = 2; // how close to center counts as "at center"
 const SPIRAL_DASH_FRAMES = 10; // how long to dash opposite
 const SPIRAL_RADIAL_WEIGHT = 1.0; // outward push
 const SPIRAL_TANGENTIAL_WEIGHT = 0.8; // sideways push (away from cat)
+const CAT_SETTLE_THRESHOLD = 0.04; // how slow the cat must be
+const CAT_SETTLE_FRAMES = 30; // how many frames in a row
 
+// Circling strategy constants
+const CIRCLING_BOUNDARY = R / CAT_SPEED_MULTIPLIER;
+const DASH_BOUNDARY = R * (1 - Math.PI / 4);
+const OPTIMAL_CIRCLE_RADIUS = (CIRCLING_BOUNDARY + DASH_BOUNDARY) / 2;
+const OPPOSITE_ANGLE_TOLERANCE = 0.05; // radians (~3 degrees)
+
+// Global variables updated during simulation
 let simState = "idle"; // "idle", "running", "terminal"
 let simResult = null;
 let currentStrategy = null;
@@ -27,7 +37,7 @@ let catAngularVelocity = 0;
 function setup() {
 	noLoop();
 
-	const canvas = createCanvas(windowWidth / 1.5, windowHeight / 1.5);
+	const canvas = createCanvas(windowWidth / 1.3, windowHeight / 1.3);
 	canvas.parent("canvas-container");
 	angleMode(RADIANS);
 
@@ -44,7 +54,7 @@ function initializeButtons() {
 
 	playPauseBtn = createButton("Pause");
 	playPauseBtn.class("btn btn-danger");
-	playPauseBtn.position(windowWidth / 3.5, windowHeight / 1.5);
+	playPauseBtn.position(windowWidth / 5, windowHeight / 1.35);
 	playPauseBtn.mousePressed(handlePlayPause);
 	playPauseBtn.hide();
 
@@ -63,9 +73,14 @@ function initializeButtons() {
 	dashOppStratBtn.position(windowWidth / 5, windowHeight / 3);
 	dashOppStratBtn.mousePressed(() => startStrategy(strategyDashOpposite));
 
+	optimalCircleBtn = createButton("Strategy: Optimal Circling");
+	optimalCircleBtn.class("btn btn-functional");
+	optimalCircleBtn.position(windowWidth / 5, windowHeight / 2.4);
+	optimalCircleBtn.mousePressed(() => startStrategy(strategyOptimalCircling));
+
 	spiralStratBtn = createButton("Strategy: Spiral Escape");
 	spiralStratBtn.class("btn btn-danger");
-	spiralStratBtn.position(windowWidth / 5, windowHeight / 2.4);
+	spiralStratBtn.position(windowWidth / 5, windowHeight / 2);
 	spiralStratBtn.mousePressed(() => startStrategy(strategySpiralEscape));
 }
 
@@ -81,6 +96,9 @@ function initializeCatMouse() {
 		spiralDashDir: null,
 		spiralCatDir: null,
 		spiralCatStillFrames: 0,
+		optimalPhase: 0,
+		optimalFrames: 0,
+		optimalDirection: null, // CW or CCW
 	};
 	prevMouse = { x: 0, y: 0 };
 
@@ -114,8 +132,13 @@ function draw() {
 			drawMouseIcon(mouse.x + SIM_SIZE * 0.8, mouse.y - SIM_SIZE * 0.8);
 			drawCat();
 			drawCatIcon(cat.x + SIM_SIZE * 0.8, cat.y - SIM_SIZE * 0.8);
-			checkCollision();
+			if (currentStrategy === strategyOptimalCircling) {
+				drawCirclingBoundary();
+				drawDashBoundary();
+			}
 			checkEscape();
+			checkCollision();
+
 			if (window.debugCatMouseSim) {
 				computeSpeeds();
 			}
@@ -154,7 +177,7 @@ function drawPool() {
 	strokeWeight(2);
 	circle(0, 0, R * 2);
 	fill("black");
-	circle(0, 0, R / 50); // center marker
+	circle(0, 0, R / 100); // center marker
 }
 
 function handlePlayPause() {
@@ -215,7 +238,7 @@ function drawCat() {
 function drawMouseIcon(x, y) {
 	push();
 	translate(x, y);
-	textSize(SIM_SIZE * 2);
+	textSize(Math.max(windowWidth, windowHeight) * 0.03);
 	text("🐭", 0, 0);
 	pop();
 }
@@ -223,8 +246,26 @@ function drawMouseIcon(x, y) {
 function drawCatIcon(x, y) {
 	push();
 	translate(x, y);
-	textSize(SIM_SIZE * 3);
+	textSize(Math.max(windowWidth, windowHeight) * 0.03);
 	text("🐱", 0, 0);
+	pop();
+}
+
+function drawCirclingBoundary() {
+	push();
+	noFill();
+	stroke("red");
+	strokeWeight(1);
+	circle(0, 0, CIRCLING_BOUNDARY * 2);
+	pop();
+}
+
+function drawDashBoundary() {
+	push();
+	noFill();
+	stroke("green"); // orange outline
+	strokeWeight(1);
+	circle(0, 0, DASH_BOUNDARY * 2);
 	pop();
 }
 
@@ -239,7 +280,7 @@ function checkCollision() {
 	const dist = sqrt(dx * dx + dy * dy);
 
 	// Collision threshold (tune this)
-	const threshold = SIM_SIZE * 0.7;
+	const threshold = SIM_SIZE * 0.5;
 
 	if (dist < threshold) {
 		simState = "terminal";
@@ -264,9 +305,10 @@ function resetSimulation() {
 	nearEdgeStratBtn.show();
 	dashOppStratBtn.show();
 	spiralStratBtn.show();
+	optimalCircleBtn.show();
 
 	// Random mouse position
-	const p = randomPointInCircle(R / 3);
+	const p = randomPointInCircle(R / 2);
 	mouse.x = p.x;
 	mouse.y = p.y;
 	mouse.speed = SIM_SPEED;
@@ -276,6 +318,9 @@ function resetSimulation() {
 	mouse.spiralDashDir = null;
 	mouse.spiralCatDir = null;
 	mouse.spiralCatStillFrames = 0;
+	mouse.optimalPhase = 0;
+	mouse.optimalFrames = 0;
+	mouse.optimalDirection = null;
 
 	// Random cat angle
 	cat.angle = randomAngle();
@@ -303,6 +348,7 @@ function startStrategy(strategyFunc) {
 	nearEdgeStratBtn.hide();
 	dashOppStratBtn.hide();
 	spiralStratBtn.hide();
+	optimalCircleBtn.hide();
 	playPauseBtn.show();
 	loop();
 }

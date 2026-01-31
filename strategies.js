@@ -28,12 +28,10 @@ function strategyNearestEdge() {
 	let dy = by - mouse.y;
 
 	const dist = sqrt(dx * dx + dy * dy);
-	if (dist > 1) {
-		dx /= dist;
-		dy /= dist;
-		mouse.x += dx * mouse.speed;
-		mouse.y += dy * mouse.speed;
-	}
+	dx /= dist;
+	dy /= dist;
+	mouse.x += dx * mouse.speed;
+	mouse.y += dy * mouse.speed;
 }
 
 function strategyDashOpposite() {
@@ -165,6 +163,107 @@ function strategySpiralEscape() {
 		// Move mouse
 		mouse.x += nx * mouse.speed;
 		mouse.y += ny * mouse.speed;
+
+		return;
+	}
+}
+
+function strategyOptimalCircling() {
+	// Compute mouse radius and angle
+	const r = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+	const mouseAngle = Math.atan2(mouse.y, mouse.x);
+
+	// Cat angle already tracked as cat.angle
+	const catAngle = cat.angle;
+
+	// Signed angular difference (mouse relative to cat)
+	let diff = Math.atan2(
+		Math.sin(mouseAngle - catAngle),
+		Math.cos(mouseAngle - catAngle),
+	);
+
+	// Radial unit vector
+	const rx = mouse.x / r;
+	const ry = mouse.y / r;
+
+	// Tangential unit vector (perpendicular to radial)
+	let tx = -ry;
+	let ty = rx;
+
+	// --- PHASE 0: Move to optimal circling radius -------------------------
+	if (mouse.optimalPhase === 0) {
+		const r = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+
+		if (Math.abs(r - OPTIMAL_CIRCLE_RADIUS) < 1) {
+			mouse.optimalPhase = 1;
+			return;
+		}
+
+		const rx = mouse.x / r;
+		const ry = mouse.y / r;
+
+		const direction = OPTIMAL_CIRCLE_RADIUS > r ? 1 : -1;
+
+		mouse.x += direction * rx * mouse.speed;
+		mouse.y += direction * ry * mouse.speed;
+		return;
+	}
+
+	// --- PHASE 1: Circle until cat is opposite ---------------------------
+	if (mouse.optimalPhase === 1) {
+		// Recompute r, radial and tangential each frame
+		let r = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+		let rx = mouse.x / r;
+		let ry = mouse.y / r;
+		let tx = -ry;
+		let ty = rx;
+
+		const mouseAngle = Math.atan2(mouse.y, mouse.x);
+		const catAngle = cat.angle;
+
+		let diff = Math.atan2(
+			Math.sin(mouseAngle - catAngle),
+			Math.cos(mouseAngle - catAngle),
+		);
+
+		const tangentialSign = diff >= 0 ? 1 : -1;
+
+		// Move tangentially
+		mouse.x += tangentialSign * tx * mouse.speed;
+		mouse.y += tangentialSign * ty * mouse.speed;
+
+		// ⭐ Snap back to the *middle* of the band, not the outer boundary
+		r = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+		const scale = OPTIMAL_CIRCLE_RADIUS / r;
+		mouse.x *= scale;
+		mouse.y *= scale;
+
+		// Check if cat is opposite
+		if (Math.abs(Math.abs(diff) - Math.PI) < OPPOSITE_ANGLE_TOLERANCE) {
+			mouse.optimalPhase = 2;
+		}
+
+		return;
+	}
+
+	// --- PHASE 2: Move outward to dash boundary --------------------------
+	if (mouse.optimalPhase === 2) {
+		if (r >= DASH_BOUNDARY) {
+			mouse.optimalPhase = 3;
+			return;
+		}
+
+		// Move outward
+		mouse.x += rx * mouse.speed;
+		mouse.y += ry * mouse.speed;
+		return;
+	}
+
+	// --- PHASE 3: Dash straight to the edge ------------------------------
+	if (mouse.optimalPhase === 3) {
+		// Move outward
+		mouse.x += rx * mouse.speed;
+		mouse.y += ry * mouse.speed;
 
 		return;
 	}
