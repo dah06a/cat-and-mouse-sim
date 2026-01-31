@@ -3,7 +3,7 @@ const windowWidth = window.innerWidth;
 const windowHeight = window.innerHeight;
 
 // Simulation constants
-const R = windowWidth / 6; // pool radius
+const R = windowWidth / 8; // pool radius
 const ANGLE_ALLOWANCE = 0.02; // about 1 degree
 const SIM_SPEED = 1;
 const SIM_SIZE = 8;
@@ -49,37 +49,59 @@ function setup() {
 function initializeButtons() {
 	resetBtn = createButton("Reset");
 	resetBtn.class("btn btn-secondary");
+	resetBtn.attribute("title", "Reset the simulation with a new random setup");
 	resetBtn.position(windowWidth / 5, windowHeight / 1.5);
 	resetBtn.mousePressed(resetSimulation);
 
 	playPauseBtn = createButton("Pause");
 	playPauseBtn.class("btn btn-danger");
+	playPauseBtn.attribute("title", "Play or pause the simulation");
 	playPauseBtn.position(windowWidth / 5, windowHeight / 1.35);
 	playPauseBtn.mousePressed(handlePlayPause);
 	playPauseBtn.hide();
 
 	manualModeStratBtn = createButton("Strategy: Manual Mode");
 	manualModeStratBtn.class("btn btn-primary");
+	manualModeStratBtn.attribute(
+		"title",
+		"Manually control the mouse with your cursor",
+	);
 	manualModeStratBtn.position(windowWidth / 5, windowHeight / 6);
 	manualModeStratBtn.mousePressed(() => startStrategy(manualUpdateMouse));
 
 	nearEdgeStratBtn = createButton("Strategy: Nearest Edge");
 	nearEdgeStratBtn.class("btn btn-warning");
+	nearEdgeStratBtn.attribute(
+		"title",
+		"The mouse will head for the nearest edge of the pool",
+	);
 	nearEdgeStratBtn.position(windowWidth / 5, windowHeight / 4);
 	nearEdgeStratBtn.mousePressed(() => startStrategy(strategyNearestEdge));
 
 	dashOppStratBtn = createButton("Strategy: Opposite Dash");
 	dashOppStratBtn.class("btn btn-info");
+	dashOppStratBtn.attribute(
+		"title",
+		"The mouse will dash to the point opposite of where the cat is at the start",
+	);
 	dashOppStratBtn.position(windowWidth / 5, windowHeight / 3);
 	dashOppStratBtn.mousePressed(() => startStrategy(strategyDashOpposite));
 
 	optimalCircleBtn = createButton("Strategy: Optimal Circling");
 	optimalCircleBtn.class("btn btn-functional");
+	optimalCircleBtn.attribute(
+		"title",
+		"The mouse will circle near the optimal radius to evade the cat, then dash to the edge",
+	);
 	optimalCircleBtn.position(windowWidth / 5, windowHeight / 2.4);
 	optimalCircleBtn.mousePressed(() => startStrategy(strategyOptimalCircling));
 
 	spiralStratBtn = createButton("Strategy: Spiral Escape");
 	spiralStratBtn.class("btn btn-danger");
+	spiralStratBtn.attribute(
+		"title",
+		"The mouse will go to the center, then spiral outward opposite the cat",
+	);
 	spiralStratBtn.position(windowWidth / 5, windowHeight / 2);
 	spiralStratBtn.mousePressed(() => startStrategy(strategySpiralEscape));
 }
